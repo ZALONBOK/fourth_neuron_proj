@@ -14,8 +14,7 @@ HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
 FPS = 30
-new_vari = 0
-
+ROCKET_MASS = 1 #KG
 
 
 
@@ -161,6 +160,30 @@ class Evolution:
             next_gen_brains.append(brain1)
         return next_gen_brains
 
+class Vector:
+    def __init__(self, angle=0,scalar=0):
+        self.angle = angle
+        self.scalar = scalar
+        self.sin_vec = 0
+        self.cos_vec = 0
+    # static because maybe earth gravity and this shit you know maybe not...
+    def seperate_verctor(self):
+        cos_speed = np.cos( (np.pi/180)*(self.angle) )*self.scalar
+        sin_speed = np.sin( (np.pi/180)*(self.angle) )*self.scalar
+        self.cos_vec = cos_speed
+        self.sin_vec = sin_speed
+        return [sin_speed, cos_speed]
+    @ staticmethod
+    def resultant_vector(forces:list[Vector]):
+        total_sin = 0
+        total_cos = 0
+        for force in forces:
+            force.seperate_verctor()
+            total_sin += force.sin_vec
+            total_cos += force.cos_vec
+        return total_cos, total_sin
+    
+
 # MARK: Body
 class Body:
     def __init__(self, start_pos = (40,40)):
@@ -175,8 +198,8 @@ class Body:
         self.leftF = False
         self.rightF = False
         self.falling_speed1 = 0
-        
-
+        self.force_xgrid_vec = 0
+        self.force_ygrid_vec = 0
     def rotate(self,rotation_size):
         self.angle += rotation_size*5
     def fire(self, engine_num, answer:bool):
@@ -202,21 +225,7 @@ class Body:
                 self.vecotors[engine_num-1] -= 1 if self.vecotors[engine_num-1] >=1 else 0
     def update_angle(self):
         self.angle += (3 if self.rightF else 0) -(3 if self.leftF else 0)
-    @staticmethod
-    def seperate_verctor(speed, angle):
-        cos_speed = np.cos( (np.pi/180)*(angle) )*speed
-        sin_speed = np.sin( (np.pi/180)*(angle) )*speed
-        return [sin_speed, cos_speed]
-    def resultant_vector(self):
-        cm,sm = self.seperate_verctor(self.vecotors[0],self.angle-180)
-        cl,sl = self.seperate_verctor(self.vecotors[1],self.angle+90)
-        cr,sr = self.seperate_verctor(self.vecotors[2],self.angle-90)
-        sum_of_cos_force = cm+cl+cr
-        sum_of_sin_force = sm+sl+sr
-        r_vector = hypot(sum_of_cos_force,sum_of_sin_force)
-        return sum_of_sin_force, sum_of_cos_force
         
-
     def update_pos(self):
         y_grid_mov, x_grid_mov = self.resultant_vector()
         self.falling_speed1 = self.falling_speed1+9.8*(1/FPS)
