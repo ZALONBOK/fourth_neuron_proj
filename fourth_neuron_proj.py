@@ -14,7 +14,7 @@ HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
 FPS = 30
-
+new_vari = 0
 
 
 
