@@ -13,8 +13,9 @@ HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
 MOON_GROUND_IMG = None
-FPS = 60
+FPS = 120
 ROCKET_MASS = 1 #KG
+PX_PER_METER = 5
 
 
 
@@ -90,7 +91,7 @@ class Brain:
             gens.append(hid_lay.get_gens())
         # gen = [list_of_hidden_layers_gens] -> [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]
         gens.append(self.output_layer.get_gens())
-        return gensa
+        return gens
     def set_gens(self, gens):
         '''give protocol -> [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]'''
         hidden_layers_gens = gens[:-1] # list of list of every layer gens [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]
@@ -212,7 +213,7 @@ class Vector:
 
 # MARK: Body
 class Body:
-    def __init__(self, start_pos = (200,650)):
+    def __init__(self, start_pos = (200,680)):
         self.x = start_pos[0]
         self.y = start_pos[1]
         self.center = (0,0)
@@ -230,6 +231,7 @@ class Body:
         self.rightF = False
         self.force_xgrid_vec = 0
         self.force_ygrid_vec = 0
+        self.angle_step = 1
         # remember that -> to the right is the 0 degree angle!
         self.vectors = [Vector(90,0),Vector(0,0),Vector(180,0),Vector(270,10*ROCKET_MASS)]
     def rotate(self,rotation_size):
@@ -247,13 +249,13 @@ class Body:
             self.vectors[i].scalar = 0 
     def update_angle(self):
         if self.vectors[2].scalar!=0:
-            self.angle += 3
+            self.angle += self.angle_step
             for i in range(3):
-                self.vectors[i].set_angle(3)
+                self.vectors[i].set_angle(self.angle_step)
         if self.vectors[1].scalar != 0:
-            self.angle -= 3
+            self.angle += -self.angle_step
             for i in range(3):
-                self.vectors[i].set_angle(-3)
+                self.vectors[i].set_angle(-self.angle_step)
     def update_pos(self):
         new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors)
         self.force_xgrid_vec = new_f_xg_v
@@ -262,9 +264,10 @@ class Body:
         self.reset_vectors()
         ax = self.force_xgrid_vec/ROCKET_MASS
         ay = self.force_ygrid_vec/ROCKET_MASS
-        # x = x + vt + 0.5a * (t^2)
-        if on_ground and self.yspeed > 0:
+        # rule of neuton if sum of forces is zero then static velocity:
+        if on_ground and self.yspeed>0: # if self.yspeed > 0 then velocity in y grid is down and can't go down when on ground!
             self.yspeed = 0
+        # x = x + vt + 0.5a * (t^2)
         new_x = self.x + self.xspeed*(1/FPS) + 0.5*(ax)*((1/FPS)**2)
         new_y = self.y + self.yspeed*(1/FPS) + 0.5*(ay)*((1/FPS)**2)
 
@@ -273,14 +276,15 @@ class Body:
 
         self.x = new_x
         self.y = new_y
+        
     def calc_next(self):
         self.update_angle()
         self.update_pos()
     def ground(self,ground_level):
         if ground_level == int(self.y):
-            print("yoooo ground level")
-            normal_f = self.force_ygrid_vec
-            self.force_ygrid_vec = 0
+            if self.force_ygrid_vec>0:
+                normal_f = self.force_ygrid_vec
+                self.force_ygrid_vec -= normal_f
             return True
         return False
 
@@ -328,9 +332,7 @@ class Window:
             Window.draw_vectors(screen,body1)
             body1.calc_next()
             Window.show_body(screen,body1)
-            print(body1.y)
             
-       
             pygame.display.flip()
             clock.tick(FPS)
         pygame.quit()
@@ -351,8 +353,8 @@ class Window:
             color = (166, 9, 99)
             if vec.scalar == 9.8:
                 color = (255,0,0)
-            x2 = int(center[0] + (5+vec.scalar*10) * math.cos(Calc.degrees_to_radians(vec.angle)))
-            y2 = int(center[1] - (5+vec.scalar*10) * math.sin(Calc.degrees_to_radians(vec.angle)))
+            x2 = int(center[0] + (5+vec.scalar*2) * math.cos(Calc.degrees_to_radians(vec.angle)))
+            y2 = int(center[1] - (5+vec.scalar*2) * math.sin(Calc.degrees_to_radians(vec.angle)))
             pygame.draw.line(screen, color, center, (x2,y2),2)
 
 
