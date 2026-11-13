@@ -1,7 +1,6 @@
 import pygame
 import numpy as np
-from math import hypot
-
+import math
 MAX_GAS = 5
 MIN_GAS = 0
 MAX_ANGEL_STEP = 5
@@ -13,6 +12,7 @@ B_LIM = 3
 HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
+MOON_GROUND_IMG = None
 FPS = 30
 ROCKET_MASS = 1 #KG
 
@@ -90,7 +90,7 @@ class Brain:
             gens.append(hid_lay.get_gens())
         # gen = [list_of_hidden_layers_gens] -> [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]
         gens.append(self.output_layer.get_gens())
-        return gens
+        return gensa
     def set_gens(self, gens):
         '''give protocol -> [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]'''
         hidden_layers_gens = gens[:-1] # list of list of every layer gens [[n1.g,n2.g,n3.g],[n1.g,n2.g,n3.g]]
@@ -160,6 +160,21 @@ class Evolution:
             next_gen_brains.append(brain1)
         return next_gen_brains
 
+# MARK: ||||||||||||||||||||||||||||||||
+class Calc:
+    @ staticmethod
+    def resultant_vector(forces):
+        total_sin = 0
+        total_cos = 0
+        for force in forces:
+            force.seperate_verctor()
+            total_sin += force.sin_vec
+            total_cos += force.cos_vec
+        return total_cos, total_sin
+    @ staticmethod
+    def degrees_to_radians(angle):
+        return (np.pi/180)*(angle) 
+        
 class Vector:
     def __init__(self, angle=0,scalar=0):
         self.angle = angle
@@ -168,80 +183,84 @@ class Vector:
         self.cos_vec = 0
     # static because maybe earth gravity and this shit you know maybe not...
     def seperate_verctor(self):
-        cos_speed = np.cos( (np.pi/180)*(self.angle) )*self.scalar
-        sin_speed = np.sin( (np.pi/180)*(self.angle) )*self.scalar
+        cos_speed = np.cos( Calc.degrees_to_radians(self.angle) )*self.scalar
+        sin_speed = np.sin( Calc.degrees_to_radians(self.angle) )*self.scalar
         self.cos_vec = cos_speed
         self.sin_vec = sin_speed
         return [sin_speed, cos_speed]
-    @ staticmethod
-    def resultant_vector(forces:list[Vector]):
-        total_sin = 0
-        total_cos = 0
-        for force in forces:
-            force.seperate_verctor()
-            total_sin += force.sin_vec
-            total_cos += force.cos_vec
-        return total_cos, total_sin
+    def __str__(self):
+        return f"ANGLE : {self.angle} self : {self.scalar}"
+
+
     
 
 # MARK: Body
 class Body:
-    def __init__(self, start_pos = (40,40)):
+    def __init__(self, start_pos = (200,50)):
         self.x = start_pos[0]
         self.y = start_pos[1]
+        self.center = (0,0)
+        self.MF = 15
+        self.LF = 5
+        self.RF = 5
+        self.angleM = 0
+        self.angleL = 0
+        self.angleR = 0
         self.angle = 0
-        self.vecotors = [0,0,0]
         self.xspeed = 0
         self.yspeed = 0
-        self.speed = 0
         self.mainF = False
         self.leftF = False
         self.rightF = False
-        self.falling_speed1 = 0
         self.force_xgrid_vec = 0
         self.force_ygrid_vec = 0
+        self.vectors = [Vector(-90,0),Vector(0,0),Vector(-180,0),Vector(90,10*ROCKET_MASS)]
     def rotate(self,rotation_size):
         self.angle += rotation_size*5
     def fire(self, engine_num, answer:bool):
         if answer:
             if engine_num == 1:
-                self.mainF = True
-                self.vecotors[engine_num-1] += 3
+                self.vectors[engine_num-1].scalar = self.MF
             elif engine_num == 2:
-                self.leftF = True
-                self.vecotors[engine_num-1] += 1
+                self.vectors[engine_num-1].scalar = self.LF
             else:
-                self.rightF = True
-                self.vecotors[engine_num-1] += 1
-        else:
-            if engine_num == 1:
-                self.mainF = False
-                self.vecotors[engine_num-1] -= 1 if self.vecotors[engine_num-1] >=1 else 0
-            elif engine_num == 2:
-                self.leftF = False
-                self.vecotors[engine_num-1] -= 1 if self.vecotors[engine_num-1] >=1 else 0
-            else:
-                self.rightF = False
-                self.vecotors[engine_num-1] -= 1 if self.vecotors[engine_num-1] >=1 else 0
+                self.vectors[engine_num-1].scalar = self.RF
+    def reset_vectors(self):
+        for i in range(0,3):
+            self.vectors[i].scalar = 0 
     def update_angle(self):
-        self.angle += (3 if self.rightF else 0) -(3 if self.leftF else 0)
-        
+        print(self.vectors[2],self.vectors[1])
+        if self.vectors[2].scalar!=0:
+            self.angle += 3
+            for i in range(3):
+                self.vectors[i].angle += 3
+        if self.vectors[1].scalar != 0:
+            self.angle -= 3
+            for i in range(3):
+                self.vectors[i].angle -= 3
+        print(self.angle)
+        self.vectors[0].angle = self.angle - 90
+        self.vectors[1].angle = self.angle +180
+        self.vectors[2].angle = self.angle
     def update_pos(self):
-        y_grid_mov, x_grid_mov = self.resultant_vector()
-        self.falling_speed1 = self.falling_speed1+9.8*(1/FPS)
-        self.x = self.x+x_grid_mov
-        self.y = self.y+y_grid_mov + self.falling_speed1
-        print("y_grid_mov: ",y_grid_mov,"fs1 :", self.falling_speed1)
-        
-        self.y += self.falling_speed1
-        print(self.falling_speed1)
+        print(self.vectors[0])
+        new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors)
+        self.force_xgrid_vec = new_f_xg_v
+        self.force_ygrid_vec = new_f_yg_v
+        self.reset_vectors()
+        ax = self.force_xgrid_vec/ROCKET_MASS
+        ay = self.force_ygrid_vec/ROCKET_MASS
+        # x = x + vt + 0.5a * (t^2)
+        new_x = self.x + self.xspeed*(1/FPS) + 0.5*(ax)*((1/FPS)**2)
+        new_y = self.y + self.yspeed*(1/FPS) + 0.5*(ay)*((1/FPS)**2)
+        self.xspeed = self.xspeed + ax * (1/FPS)
+        self.yspeed = self.yspeed + ay * (1/FPS)
+
+        self.x = new_x
+        self.y = new_y
     def calc_next(self):
         self.update_angle()
         self.update_pos()
-
-        
-        
-
         '''dx = target_pos_for_this_cycle[0]+13.5-creature.x
         dy = target_pos_for_this_cycle[1]+13.5-creature.y
         angle_from_target = ((np.atan2(dy,dx)*(180/np.pi) + 180 - body.angle))%360 -180'''
@@ -254,8 +273,10 @@ class Window:
         pygame.init()
     @staticmethod
     def load_assests():
-        global ROCKET_IMG
+        global ROCKET_IMG, MOON_GROUND_IMG
         ROCKET_IMG = pygame.image.load(r"E:\python_1\AI\Fourth_neuron_proj\rocket_ship.png")
+        MOON_GROUND_IMG = pygame.image.load(r"E:\python_1\AI\Fourth_neuron_proj\moon_ground.png")
+
     @staticmethod
     def run(win_size = (900,900)):
 
@@ -268,6 +289,7 @@ class Window:
         while running:
             m,l,r = False,False,False
             screen.fill((2,22,80))
+            screen.blit(MOON_GROUND_IMG, (0,693))
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -284,8 +306,8 @@ class Window:
             
             body1.calc_next()
             Window.show_body(screen,body1)
-
-            
+            Window.draw_vectors(screen,body1)
+       
             pygame.display.flip()
             clock.tick(FPS)
         pygame.quit()
@@ -295,8 +317,22 @@ class Window:
     def show_body(screen:pygame.Surface, body: Body):
         rotated_rocket = pygame.transform.rotate(ROCKET_IMG, body.angle)
         new_rect = rotated_rocket.get_rect()
-        new_rect.center = (body.x, body.y)
+        body.center = (body.x, body.y)
+        new_rect.center = body.center
         screen.blit(rotated_rocket, new_rect)
+        pygame.draw.circle(screen, (0,0,0),new_rect.center,3)
+    @staticmethod
+    def draw_vectors(screen, body:Body):
+        center = body.center
+        for vec in body.vectors:
+            color = (166, 9, 99)
+            if vec.scalar == 9.8:
+                color = (255,0,0)
+            x2 = int(center[0] + (1+vec.scalar*5) * math.cos(Calc.degrees_to_radians(vec.angle)))
+            y2 = int(center[1] - (1+vec.scalar*5) * math.sin(Calc.degrees_to_radians(vec.angle)))
+            pygame.draw.line(screen, color, center, (x2,y2),2)
+
+
 
 def main():
     Window.pygame_init()
