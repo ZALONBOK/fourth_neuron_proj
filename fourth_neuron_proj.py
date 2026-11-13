@@ -13,7 +13,7 @@ HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
 MOON_GROUND_IMG = None
-FPS = 30
+FPS = 60
 ROCKET_MASS = 1 #KG
 
 
@@ -181,10 +181,26 @@ class Vector:
         self.scalar = scalar
         self.sin_vec = 0
         self.cos_vec = 0
+    def set_angle(self,rotation_size):
+        self.angle += rotation_size
+        while self.angle<0:
+            self.angle = 360 + self.angle
+        self.angle %= 360
+        return self.angle
+
     # static because maybe earth gravity and this shit you know maybe not...
     def seperate_verctor(self):
-        cos_speed = np.cos( Calc.degrees_to_radians(self.angle) )*self.scalar
-        sin_speed = np.sin( Calc.degrees_to_radians(self.angle) )*self.scalar
+        z,q = 1,-1
+        self.angle %= 360
+        '''if 180<self.angle<360:
+            #because sin(a) for every 360>a>180 is negetive
+            q = -1
+        if 90<self.angle<270:
+            # because cos(a) for every -90<a<90 is negetive
+            z = -1'''
+        cos_speed = np.cos( Calc.degrees_to_radians(self.angle) )*self.scalar *z
+        sin_speed = np.sin( Calc.degrees_to_radians(self.angle) )*self.scalar *q
+
         self.cos_vec = cos_speed
         self.sin_vec = sin_speed
         return [sin_speed, cos_speed]
@@ -196,11 +212,11 @@ class Vector:
 
 # MARK: Body
 class Body:
-    def __init__(self, start_pos = (200,50)):
+    def __init__(self, start_pos = (200,650)):
         self.x = start_pos[0]
         self.y = start_pos[1]
         self.center = (0,0)
-        self.MF = 15
+        self.MF = 30
         self.LF = 5
         self.RF = 5
         self.angleM = 0
@@ -214,7 +230,8 @@ class Body:
         self.rightF = False
         self.force_xgrid_vec = 0
         self.force_ygrid_vec = 0
-        self.vectors = [Vector(-90,0),Vector(0,0),Vector(-180,0),Vector(90,10*ROCKET_MASS)]
+        # remember that -> to the right is the 0 degree angle!
+        self.vectors = [Vector(90,0),Vector(0,0),Vector(180,0),Vector(270,10*ROCKET_MASS)]
     def rotate(self,rotation_size):
         self.angle += rotation_size*5
     def fire(self, engine_num, answer:bool):
@@ -229,30 +246,28 @@ class Body:
         for i in range(0,3):
             self.vectors[i].scalar = 0 
     def update_angle(self):
-        print(self.vectors[2],self.vectors[1])
         if self.vectors[2].scalar!=0:
             self.angle += 3
             for i in range(3):
-                self.vectors[i].angle += 3
+                self.vectors[i].set_angle(3)
         if self.vectors[1].scalar != 0:
             self.angle -= 3
             for i in range(3):
-                self.vectors[i].angle -= 3
-        print(self.angle)
-        self.vectors[0].angle = self.angle - 90
-        self.vectors[1].angle = self.angle +180
-        self.vectors[2].angle = self.angle
+                self.vectors[i].set_angle(-3)
     def update_pos(self):
-        print(self.vectors[0])
         new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors)
         self.force_xgrid_vec = new_f_xg_v
         self.force_ygrid_vec = new_f_yg_v
+        on_ground = self.ground(693)
         self.reset_vectors()
         ax = self.force_xgrid_vec/ROCKET_MASS
         ay = self.force_ygrid_vec/ROCKET_MASS
         # x = x + vt + 0.5a * (t^2)
+        if on_ground and self.yspeed > 0:
+            self.yspeed = 0
         new_x = self.x + self.xspeed*(1/FPS) + 0.5*(ax)*((1/FPS)**2)
         new_y = self.y + self.yspeed*(1/FPS) + 0.5*(ay)*((1/FPS)**2)
+
         self.xspeed = self.xspeed + ax * (1/FPS)
         self.yspeed = self.yspeed + ay * (1/FPS)
 
@@ -261,9 +276,16 @@ class Body:
     def calc_next(self):
         self.update_angle()
         self.update_pos()
-        '''dx = target_pos_for_this_cycle[0]+13.5-creature.x
-        dy = target_pos_for_this_cycle[1]+13.5-creature.y
-        angle_from_target = ((np.atan2(dy,dx)*(180/np.pi) + 180 - body.angle))%360 -180'''
+    def ground(self,ground_level):
+        if ground_level == int(self.y):
+            print("yoooo ground level")
+            normal_f = self.force_ygrid_vec
+            self.force_ygrid_vec = 0
+            return True
+        return False
+
+
+        
 
     
 # MARK: Window
@@ -303,10 +325,11 @@ class Window:
             body1.fire(1,m)
             body1.fire(2,l)
             body1.fire(3,r)
-            
+            Window.draw_vectors(screen,body1)
             body1.calc_next()
             Window.show_body(screen,body1)
-            Window.draw_vectors(screen,body1)
+            print(body1.y)
+            
        
             pygame.display.flip()
             clock.tick(FPS)
@@ -328,8 +351,8 @@ class Window:
             color = (166, 9, 99)
             if vec.scalar == 9.8:
                 color = (255,0,0)
-            x2 = int(center[0] + (1+vec.scalar*5) * math.cos(Calc.degrees_to_radians(vec.angle)))
-            y2 = int(center[1] - (1+vec.scalar*5) * math.sin(Calc.degrees_to_radians(vec.angle)))
+            x2 = int(center[0] + (5+vec.scalar*10) * math.cos(Calc.degrees_to_radians(vec.angle)))
+            y2 = int(center[1] - (5+vec.scalar*10) * math.sin(Calc.degrees_to_radians(vec.angle)))
             pygame.draw.line(screen, color, center, (x2,y2),2)
 
 
