@@ -1,6 +1,8 @@
 import pygame
 import numpy as np
 import math
+from math import dist
+G = 6.67430e-11
 MAX_GAS = 5
 MIN_GAS = 0
 MAX_ANGEL_STEP = 5
@@ -13,9 +15,10 @@ HIDDEN_LAYER_SIZES = [12,5]
 
 ROCKET_IMG = None
 MOON_GROUND_IMG = None
-FPS = 120
-ROCKET_MASS = 1 #KG
+FPS = 90
+ROCKET_MASS = 5 #KG
 PX_PER_METER = 5
+
 
 
 
@@ -162,19 +165,7 @@ class Evolution:
         return next_gen_brains
 
 # MARK: ||||||||||||||||||||||||||||||||
-class Calc:
-    @ staticmethod
-    def resultant_vector(forces):
-        total_sin = 0
-        total_cos = 0
-        for force in forces:
-            force.seperate_verctor()
-            total_sin += force.sin_vec
-            total_cos += force.cos_vec
-        return total_cos, total_sin
-    @ staticmethod
-    def degrees_to_radians(angle):
-        return (np.pi/180)*(angle) 
+
         
 class Vector:
     def __init__(self, angle=0,scalar=0):
@@ -208,7 +199,15 @@ class Vector:
     def __str__(self):
         return f"ANGLE : {self.angle} self : {self.scalar}"
 
-
+class Astro_body:
+    def __init__(self, center, radius, mass, color = (200,55,150)):
+        self.mass = mass
+        self.radius = radius
+        self.color = color
+        self.center = center
+    def draw(self, screen):
+        pygame.draw.circle(screen, self.color, self.center, self.radius)
+    
     
 
 # MARK: Body
@@ -217,7 +216,7 @@ class Body:
         self.x = start_pos[0]
         self.y = start_pos[1]
         self.center = (0,0)
-        self.MF = 30
+        self.MF = 15*ROCKET_MASS
         self.LF = 5
         self.RF = 5
         self.angleM = 0
@@ -258,8 +257,8 @@ class Body:
                 self.vectors[i].set_angle(-self.angle_step)
     def update_pos(self):
         new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors)
-        self.force_xgrid_vec = new_f_xg_v
-        self.force_ygrid_vec = new_f_yg_v
+        self.force_xgrid_vec = new_f_xg_v*PX_PER_METER
+        self.force_ygrid_vec = new_f_yg_v*PX_PER_METER
         on_ground = self.ground(693)
         self.reset_vectors()
         ax = self.force_xgrid_vec/ROCKET_MASS
@@ -268,29 +267,45 @@ class Body:
         if on_ground and self.yspeed>0: # if self.yspeed > 0 then velocity in y grid is down and can't go down when on ground!
             self.yspeed = 0
         # x = x + vt + 0.5a * (t^2)
-        new_x = self.x + self.xspeed*(1/FPS) + 0.5*(ax)*((1/FPS)**2)
-        new_y = self.y + self.yspeed*(1/FPS) + 0.5*(ay)*((1/FPS)**2)
+        new_x =  ( self.x + self.xspeed*(1/FPS) + 0.5*(ax)*((1/FPS)**2) )
+        new_y =  ( self.y + self.yspeed*(1/FPS) + 0.5*(ay)*((1/FPS)**2) )
 
         self.xspeed = self.xspeed + ax * (1/FPS)
         self.yspeed = self.yspeed + ay * (1/FPS)
 
         self.x = new_x
         self.y = new_y
+        print(new_x,new_y,"|||",self.force_ygrid_vec,self.force_xgrid_vec)
         
     def calc_next(self):
         self.update_angle()
         self.update_pos()
     def ground(self,ground_level):
-        if ground_level == int(self.y):
+        if ground_level <= int(self.y):
             if self.force_ygrid_vec>0:
                 normal_f = self.force_ygrid_vec
                 self.force_ygrid_vec -= normal_f
             return True
         return False
-
-
-        
-
+class Calc:
+    @ staticmethod
+    def resultant_vector(forces):
+        total_sin = 0
+        total_cos = 0
+        for force in forces:
+            force.seperate_verctor()
+            total_sin += force.sin_vec
+            total_cos += force.cos_vec
+        return total_cos, total_sin
+    @ staticmethod
+    def degrees_to_radians(angle):
+        return (np.pi/180)*(angle) 
+    @ staticmethod
+    def law_of_uni_grav(mass1, mass2, dis):
+        return G* (mass1*mass2)/(dis**2)
+    @ staticmethod
+    def force_of_astro_body(rocket:Body, astro_body:Astro_body):
+        return Calc.law_of_uni_grav(ROCKET_MASS, astro_body.mass, dist(rocket.center, astro_body.center))
     
 # MARK: Window
 class Window:
@@ -307,6 +322,7 @@ class Window:
     def run(win_size = (900,900)):
 
         body1 = Body()
+        pluto = Astro_body((20,20), 50, 20)
         m,l,r = False,False,False
         
         screen = pygame.display.set_mode(win_size)
@@ -332,6 +348,7 @@ class Window:
             Window.draw_vectors(screen,body1)
             body1.calc_next()
             Window.show_body(screen,body1)
+            Window.draw_astro_body(screen, pluto)
             
             pygame.display.flip()
             clock.tick(FPS)
@@ -356,7 +373,9 @@ class Window:
             x2 = int(center[0] + (5+vec.scalar*2) * math.cos(Calc.degrees_to_radians(vec.angle)))
             y2 = int(center[1] - (5+vec.scalar*2) * math.sin(Calc.degrees_to_radians(vec.angle)))
             pygame.draw.line(screen, color, center, (x2,y2),2)
-
+    @staticmethod
+    def draw_astro_body(screen,astro_body):
+        astro_body.draw(screen)
 
 
 def main():
