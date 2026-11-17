@@ -1,22 +1,25 @@
 import pygame
 import numpy as np
+
 import math
 from math import dist
+from random import uniform, choice
 G = 6.67430e-11
+
 MAX_GAS = 5
 MIN_GAS = 0
 MAX_ANGEL_STEP = 5
 RADIUS_LEN = 50 #math.hypot(750,750)
 ANGLE = 30
-LINES_NUM = 7
+INPUT_SIZE = 2
 W_LIM = 3
 B_LIM = 3
-HIDDEN_LAYER_SIZES = [12,5]
+HIDDEN_LAYER_SIZES = [6,6]
 
 ROCKET_IMG = None
 MOON_GROUND_IMG = None
-FPS = 90
-ROCKET_MASS = 5 #KG
+FPS = 20
+ROCKET_MASS = 100 #KG
 PX_PER_METER = 5
 
 
@@ -159,7 +162,7 @@ class Evolution:
         #print(f"DEBUG: amount of new brains : {len(next_gen_gens)}")
         next_gen_brains = []
         for brain_gens in next_gen_gens:
-            brain1 = Brain(LINES_NUM,HIDDEN_LAYER_SIZES,2)
+            brain1 = Brain(INPUT_SIZE ,HIDDEN_LAYER_SIZES,2)
             brain1.set_gens(brain_gens)
             next_gen_brains.append(brain1)
         return next_gen_brains
@@ -190,8 +193,8 @@ class Vector:
         if 90<self.angle<270:
             # because cos(a) for every -90<a<90 is negetive
             z = -1'''
-        cos_speed = np.cos( Calc.degrees_to_radians(self.angle) )*self.scalar *z
-        sin_speed = np.sin( Calc.degrees_to_radians(self.angle) )*self.scalar *q
+        cos_speed = np.cos( Calc.degree_to_radian(self.angle) )*self.scalar *z
+        sin_speed = np.sin( Calc.degree_to_radian(self.angle) )*self.scalar *q
 
         self.cos_vec = cos_speed
         self.sin_vec = sin_speed
@@ -216,9 +219,9 @@ class Body:
         self.x = start_pos[0]
         self.y = start_pos[1]
         self.center = (0,0)
-        self.MF = 15*ROCKET_MASS
-        self.LF = 5
-        self.RF = 5
+        self.MF = 4*ROCKET_MASS
+        self.LF = 6
+        self.RF = 6
         self.angleM = 0
         self.angleL = 0
         self.angleR = 0
@@ -232,7 +235,8 @@ class Body:
         self.force_ygrid_vec = 0
         self.angle_step = 1
         # remember that -> to the right is the 0 degree angle!
-        self.vectors = [Vector(90,0),Vector(0,0),Vector(180,0),Vector(270,10*ROCKET_MASS)]
+        self.vectors = [Vector(90,0),Vector(0,0),Vector(180,0),Vector(270,2*ROCKET_MASS)]
+        self.outer_forces = []
     def rotate(self,rotation_size):
         self.angle += rotation_size*5
     def fire(self, engine_num, answer:bool):
@@ -246,6 +250,7 @@ class Body:
     def reset_vectors(self):
         for i in range(0,3):
             self.vectors[i].scalar = 0 
+        self.outer_forces.clear()
     def update_angle(self):
         if self.vectors[2].scalar!=0:
             self.angle += self.angle_step
@@ -255,8 +260,13 @@ class Body:
             self.angle += -self.angle_step
             for i in range(3):
                 self.vectors[i].set_angle(-self.angle_step)
+        # maybe need now going to check  about normal force cuz looks like its locking it
+        '''for i in self.outer_forces:
+            
+            i.set_angle(i.angle)
+            print("update angle",i.angle)'''
     def update_pos(self):
-        new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors)
+        new_f_xg_v, new_f_yg_v = Calc.resultant_vector(self.vectors + self.outer_forces)
         self.force_xgrid_vec = new_f_xg_v*PX_PER_METER
         self.force_ygrid_vec = new_f_yg_v*PX_PER_METER
         on_ground = self.ground(693)
@@ -275,7 +285,6 @@ class Body:
 
         self.x = new_x
         self.y = new_y
-        print(new_x,new_y,"|||",self.force_ygrid_vec,self.force_xgrid_vec)
         
     def calc_next(self):
         self.update_angle()
@@ -287,6 +296,36 @@ class Body:
                 self.force_ygrid_vec -= normal_f
             return True
         return False
+    def draw(self, screen):
+        rotated_rocket = pygame.transform.rotate(ROCKET_IMG, self.angle)
+        new_rect = rotated_rocket.get_rect()
+        self.center = (self.x, self.y)
+        new_rect.center =  (self.x, self.y)
+        screen.blit(rotated_rocket, new_rect)
+        pygame.draw.circle(screen, (0,0,0),new_rect.center,3)
+    def outer_force(self, force:Vector):
+        self.outer_forces.append(force)
+        print(self.outer_forces[0])
+    def angle_from_asto_body(self,astro_body_center):
+        q = 1
+        z = 1
+        adding = 0
+        if (-self.center[1]+astro_body_center[1]) > 0:
+            q = -q
+        if (self.center[0]-astro_body_center[0]) > 0:
+            z = -z
+        if q < 0 and z < 0:
+            adding = 180
+        elif q<0 and z>0:
+            z = z
+            q = -q
+            adding = 180
+        elif q>0 and z<0:
+            z = -z
+        
+        return Calc.radian_to_degree( np.arctan( ((-self.center[1]-+-1*astro_body_center[1])*q) / ((self.center[0]-astro_body_center[0])*z) ) )%180 + adding
+        
+
 class Calc:
     @ staticmethod
     def resultant_vector(forces):
@@ -296,17 +335,26 @@ class Calc:
             force.seperate_verctor()
             total_sin += force.sin_vec
             total_cos += force.cos_vec
+            print("s, c:",force.sin_vec,force.cos_vec,"a",force.angle,"s",force.scalar)
         return total_cos, total_sin
     @ staticmethod
-    def degrees_to_radians(angle):
+    def degree_to_radian(angle):
         return (np.pi/180)*(angle) 
+    def radian_to_degree(angle):
+        return (180/np.pi)*angle
     @ staticmethod
     def law_of_uni_grav(mass1, mass2, dis):
         return G* (mass1*mass2)/(dis**2)
     @ staticmethod
     def force_of_astro_body(rocket:Body, astro_body:Astro_body):
-        return Calc.law_of_uni_grav(ROCKET_MASS, astro_body.mass, dist(rocket.center, astro_body.center))
-    
+        return Calc.law_of_uni_grav(ROCKET_MASS, astro_body.mass, dist(rocket.center, astro_body.center)/PX_PER_METER)
+# MARK: Rocket
+class Rocket:
+    def __init__(self, brain:Brain, body: Body):
+        self.brain = brain
+        self.body = body
+    def __str__(self):
+        return f"Rocket object:\nbrain gens:\n{self.brain.gens()}\nbody pos: {self.body.x,self.body.y}, body angel: {self.body.angle}"
 # MARK: Window
 class Window:
     @staticmethod
@@ -320,9 +368,10 @@ class Window:
 
     @staticmethod
     def run(win_size = (900,900)):
-
+        #rocky = Rocket(Brain(INPUT_SIZE, HIDDEN_LAYER_SIZES, 3), Body())
         body1 = Body()
-        pluto = Astro_body((20,20), 50, 20)
+        pluto = Astro_body((300,350), 30, mass = 4e+13)
+        pluto2 = Astro_body((600,300), 25, mass = 2e+13, color="blue")
         m,l,r = False,False,False
         
         screen = pygame.display.set_mode(win_size)
@@ -332,6 +381,7 @@ class Window:
             m,l,r = False,False,False
             screen.fill((2,22,80))
             screen.blit(MOON_GROUND_IMG, (0,693))
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -345,34 +395,39 @@ class Window:
             body1.fire(1,m)
             body1.fire(2,l)
             body1.fire(3,r)
+            body1.outer_force(Vector( body1.angle_from_asto_body(pluto.center) , Calc.force_of_astro_body(body1, pluto) ))
+            body1.outer_force(Vector( body1.angle_from_asto_body(pluto2.center) , Calc.force_of_astro_body(body1, pluto2) ))
             Window.draw_vectors(screen,body1)
             body1.calc_next()
-            Window.show_body(screen,body1)
+            Window.draw_body(screen,body1)
             Window.draw_astro_body(screen, pluto)
+            Window.draw_astro_body(screen, pluto2)
             
+            
+            #print(rocky.brain.predict([uniform(-1,1),uniform(-1,1)]))
             pygame.display.flip()
             clock.tick(FPS)
         pygame.quit()
 
 
     @staticmethod
-    def show_body(screen:pygame.Surface, body: Body):
-        rotated_rocket = pygame.transform.rotate(ROCKET_IMG, body.angle)
-        new_rect = rotated_rocket.get_rect()
-        body.center = (body.x, body.y)
-        new_rect.center = body.center
-        screen.blit(rotated_rocket, new_rect)
-        pygame.draw.circle(screen, (0,0,0),new_rect.center,3)
+    def draw_body(screen:pygame.Surface, body: Body):
+        body.draw(screen)
     @staticmethod
     def draw_vectors(screen, body:Body):
+        #center = body.center
         center = body.center
-        for vec in body.vectors:
-            color = (166, 9, 99)
+        for vec in body.vectors + body.outer_forces:
+            color = "black"
+            grow_by = ROCKET_MASS/(PX_PER_METER**3)
+
             if vec.scalar == 9.8:
-                color = (255,0,0)
-            x2 = int(center[0] + (5+vec.scalar*2) * math.cos(Calc.degrees_to_radians(vec.angle)))
-            y2 = int(center[1] - (5+vec.scalar*2) * math.sin(Calc.degrees_to_radians(vec.angle)))
-            pygame.draw.line(screen, color, center, (x2,y2),2)
+                color = (255,222,0)
+            center[0] - 100
+            x2 = int(center[0] + (5+vec.scalar*grow_by) * math.cos(Calc.degree_to_radian(vec.angle)))
+            y2 = int(center[1] - (5+vec.scalar*grow_by) * math.sin(Calc.degree_to_radian(vec.angle)))
+            pygame.draw.aaline(screen, color, center, (x2,y2),1)
+            pygame.draw.circle(screen,(222,0,22),(x2,y2),2)
     @staticmethod
     def draw_astro_body(screen,astro_body):
         astro_body.draw(screen)
@@ -383,7 +438,7 @@ def main():
     Window.load_assests()
     Window.run()
 
-
+print("START")
 main()
 
 
